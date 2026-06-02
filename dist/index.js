@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import db from './firebase.js';
-import { collection, addDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, Timestamp, deleteDoc } from 'firebase/firestore';
 const PORT = 3001;
 const app = express();
 app.use(cors());
@@ -88,14 +88,56 @@ io.on('connection', (socket) => {
             }
         }
         catch (error) {
-            const msg = error instanceof Error ? error.message : 'Error desconocido al validar sala';
+            const msg = error instanceof Error
+                ? error.message
+                : 'Error desconocido al validar sala';
             socket.emit('error-msg', msg);
+        }
+    });
+    socket.on('delete-room', async (data) => {
+        const { roomId, uid } = data;
+        console.log('DELETE ROOM DATA:', data);
+        if (!roomId || !uid) {
+            socket.emit('error-msg', 'Datos incompletos para eliminar la sala');
+            return;
+        }
+        try {
+            const q = query(collection(db, 'rooms'), where('hostUid', '==', uid), where('roomId', '==', roomId));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                console.log('Eliminando sala:', roomId);
+                const roomDoc = querySnapshot.docs[0];
+                console.log('Documentos encontrados:', querySnapshot.size);
+                querySnapshot.forEach((doc) => {
+                    console.log(doc.id, doc.data());
+                });
+                await deleteDoc(roomDoc.ref);
+                console.log('SALA ELIMINADA');
+                io.to(roomId).emit('room-deleted', {
+                    message: 'La sala ha sido eliminada por el host',
+                    roomId: roomId,
+                    uid: uid
+                });
+                socket.emit('room-deleted', {
+                    message: 'La sala ha sido eliminada por el host',
+                    roomId: roomId,
+                    uid: uid
+                });
+                activeUsers.delete(roomId);
+            }
+        }
+        catch (error) {
+            console.log(error);
         }
     });
     // 2. Routing messages and saving to Firestore
     socket.on('send-message', async (data) => {
         const { roomId, senderUid, senderUsername, text } = data;
-        if (!roomId || !senderUid || !senderUsername || !text || text.trim().length === 0) {
+        if (!roomId ||
+            !senderUid ||
+            !senderUsername ||
+            !text ||
+            text.trim().length === 0) {
             return;
         }
         try {
