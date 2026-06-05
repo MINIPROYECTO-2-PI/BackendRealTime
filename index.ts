@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import express from 'express'
 import { createServer } from 'http'
 import { Server, Socket } from 'socket.io'
@@ -14,7 +15,7 @@ import {
 } from 'firebase/firestore'
 import type { DocumentData, QuerySnapshot } from 'firebase/firestore'
 
-const PORT = 3001
+const PORT = Number(process.env.PORT) || 3001
 const app = express()
 
 app.use(cors())
@@ -251,6 +252,6 @@ io.on('connection', (socket: Socket) => {
   })
 })
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor Real-time activo en http://localhost:${PORT}`)
 })
