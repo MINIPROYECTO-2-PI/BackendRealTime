@@ -4,6 +4,8 @@ import { createServer } from 'http'
 import { Server, Socket } from 'socket.io'
 import cors from 'cors'
 import db from './firebase.js'
+import { setupSwagger } from './swagger.js'
+
 import {
   collection,
   addDoc,
@@ -15,11 +17,15 @@ import {
 } from 'firebase/firestore'
 import type { DocumentData, QuerySnapshot } from 'firebase/firestore'
 
+
 const PORT = Number(process.env.PORT) || 3001
 const app = express()
 
 app.use(cors())
 app.use(express.json())
+
+// Swagger documentation — available at /api-docs
+setupSwagger(app)
 
 app.get('/', (_req, res) => {
   res.send('Servidor Real-time de WebSockets funcionando en puerto 3001')
@@ -32,6 +38,7 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST']
   }
 })
+const peers: any = {}
 
 // Memory tracking of active users in rooms
 // roomId -> Map of socket.id -> { username, uid }
@@ -46,7 +53,23 @@ const messagesCollection = collection(db, 'messages')
 
 io.on('connection', (socket: Socket) => {
   console.log(`Cliente conectado: ${socket.id}`)
-
+  if (!peers[socket.id]) {
+    peers[socket.id] = {}
+    socket.emit('introduction', Object.keys(peers))
+    io.emit('newUserConnected', socket.id)
+    console.log(
+      'Peer joined with ID',
+      socket.id,
+      '. There are ' + io.engine.clientsCount + ' peer(s) connected.'
+    )
+  }
+  socket.on('signal', (to, from, data) => {
+    if (to in peers) {
+      io.to(to).emit('signal', to, from, data)
+    } else {
+      console.log('Peer not found!')
+    }
+  })
   // 1. Join room and validate existence
   socket.on(
     'join-room',
@@ -227,7 +250,13 @@ io.on('connection', (socket: Socket) => {
   // 3. User disconnects
   socket.on('disconnect', () => {
     console.log(`Cliente desconectado: ${socket.id}`)
-
+    delete peers[socket.id]
+    io.sockets.emit('userDisconnected', socket.id)
+    console.log(
+      'Peer disconnected with ID',
+      socket.id,
+      '. There are ' + io.engine.clientsCount + ' peer(s) connected.'
+    )
     // Search and remove user from presence list across all rooms
     for (const [roomId, usersMap] of activeUsers.entries()) {
       if (usersMap.has(socket.id)) {
