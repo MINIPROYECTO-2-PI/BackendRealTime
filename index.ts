@@ -4,6 +4,7 @@ import { createServer } from 'http'
 import { Server, Socket } from 'socket.io'
 import cors from 'cors'
 import db from './firebase.js'
+import { setupSwagger } from './swagger.js'
 
 import {
   collection,
@@ -21,6 +22,8 @@ const app = express()
 
 app.use(cors())
 app.use(express.json())
+
+setupSwagger(app)
 
 app.get('/', (_req, res) => {
   res.send('Servidor Real-time de WebSockets funcionando en puerto 3001')
