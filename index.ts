@@ -43,13 +43,17 @@ const roomsCollection = collection(db, 'rooms')
 const messagesCollection = collection(db, 'messages')
 
 io.on('connection', (socket: Socket) => {
-  console.log(`Cliente conectado: ${socket.id}`)
+  // ✅ FIX CRÍTICO: capturar socket.id INMEDIATAMENTE, antes de cualquier async.
+  // En Socket.IO v4, socket.id puede quedar undefined si se accede después de
+  // un await porque el contexto del socket puede cambiar o perderse en ciertas
+  // versiones. Capturarlo aquí garantiza que siempre sea el valor correcto.
+  const mySocketId = socket.id
+  console.log(`Cliente conectado: ${mySocketId}`)
 
   // ────────────────────────────────────────────────
   // SEÑALIZACIÓN WebRTC — relay puro entre peers
   // ────────────────────────────────────────────────
   socket.on('signal', (to: string, from: string, data: unknown) => {
-    // Solo retransmitir si el destinatario está conectado
     if (io.sockets.sockets.has(to)) {
       io.to(to).emit('signal', to, from, data)
     } else {
@@ -81,33 +85,31 @@ io.on('connection', (socket: Socket) => {
 
         const roomData = snapshot.docs[0].data()
 
-        // Unir el socket a la sala
         socket.join(roomId)
 
-        // Registrar en presencia
         if (!activeUsers.has(roomId)) {
           activeUsers.set(roomId, new Map())
         }
-        activeUsers.get(roomId)!.set(socket.id, { username, uid })
+        // ✅ Usar mySocketId (capturado antes del await) en lugar de socket.id
+        activeUsers.get(roomId)!.set(mySocketId, { username, uid })
 
         const currentUsersList = Array.from(
           activeUsers.get(roomId)!,
           ([socketId, user]) => ({ ...user, socketId })
         )
 
-        // ✅ FIX: Enviar a quien se une la lista completa incluyendo su propio socketId
         socket.emit('room-joined-success', {
           roomId,
           roomName: roomData.name,
           hostUid: roomData.hostUid,
           activeUsers: currentUsersList,
-          mySocketId: socket.id // ← el frontend lo necesita para no crear offer a sí mismo
+          // ✅ FIX CRÍTICO: usar mySocketId capturado antes del await
+          mySocketId: mySocketId
         })
 
-        // ✅ FIX: Notificar SOLO a usuarios de esta sala (no global)
-        // y pasarles el socketId del nuevo peer para que inicien la oferta
         socket.to(roomId).emit('new-peer-joined', {
-          peerId: socket.id,
+          // ✅ Usar mySocketId aquí también
+          peerId: mySocketId,
           username,
           uid,
           activeUsers: currentUsersList
@@ -169,7 +171,6 @@ io.on('connection', (socket: Socket) => {
       if (!querySnapshot.empty) {
         await deleteDoc(querySnapshot.docs[0].ref)
 
-        // ✅ FIX: El evento que escucha el frontend es 'delete-room', no 'room-deleted'
         io.to(roomId).emit('delete-room', {
           roomId,
           message: 'La sala ha sido eliminada por el host'
@@ -225,20 +226,20 @@ io.on('connection', (socket: Socket) => {
   // DESCONEXIÓN
   // ────────────────────────────────────────────────
   socket.on('disconnect', () => {
-    console.log(`Cliente desconectado: ${socket.id}`)
+    console.log(`Cliente desconectado: ${mySocketId}`)
 
     for (const [roomId, usersMap] of activeUsers.entries()) {
-      if (usersMap.has(socket.id)) {
-        const userInfo = usersMap.get(socket.id)!
-        usersMap.delete(socket.id)
+      // ✅ Usar mySocketId capturado, no socket.id
+      if (usersMap.has(mySocketId)) {
+        const userInfo = usersMap.get(mySocketId)!
+        usersMap.delete(mySocketId)
 
         const currentUsersList = Array.from(usersMap, ([socketId, user]) => ({
           ...user,
           socketId
         }))
 
-        // ✅ FIX: Emitir userDisconnected y user-left con el peerId correcto
-        io.to(roomId).emit('userDisconnected', socket.id)
+        io.to(roomId).emit('userDisconnected', mySocketId)
         io.to(roomId).emit('user-left', {
           username: userInfo.username,
           uid: userInfo.uid,
