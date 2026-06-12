@@ -105,7 +105,13 @@ io.on('connection', (socket: Socket) => {
         console.log(`Usuario @${username} se unió a la sala: ${roomId}`)
 
         // Notify other users in the room
-        const currentUsersList = Array.from(activeUsers.get(roomId)!.values())
+        const currentUsersList = Array.from(
+          activeUsers.get(roomId)!,
+          ([socketId, user]) => ({
+            ...user,
+            socketId
+          })
+        )
 
         // Emit events
         socket.emit('room-joined-success', {
@@ -263,7 +269,10 @@ io.on('connection', (socket: Socket) => {
         const userInfo = usersMap.get(socket.id)!
         usersMap.delete(socket.id)
 
-        const currentUsersList = Array.from(usersMap.values())
+        const currentUsersList = Array.from(usersMap, ([socketId, user]) => ({
+          ...user,
+          socketId
+        }))
 
         // Notify other room users
         io.to(roomId).emit('user-left', {
