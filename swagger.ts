@@ -37,7 +37,8 @@ const swaggerDefinition = {
     },
     {
       name: 'WebSocket — Salas',
-      description: 'Eventos para unirse, validar y eliminar salas en tiempo real'
+      description:
+        'Eventos para unirse, validar y eliminar salas en tiempo real'
     },
     {
       name: 'WebSocket — Mensajes',
@@ -55,12 +56,36 @@ const swaggerDefinition = {
         type: 'object',
         description: 'Estructura de un mensaje de chat',
         properties: {
-          id: { type: 'string', description: 'ID del documento en Firestore', example: 'msg_abc123' },
-          roomId: { type: 'string', description: 'Código de la sala', example: 'a3b-c4d5-e6f' },
-          senderUid: { type: 'string', description: 'UID del remitente', example: 'user_uid_123' },
-          senderUsername: { type: 'string', description: 'Username del remitente', example: 'jhoan_dev' },
-          text: { type: 'string', description: 'Contenido del mensaje', example: '¡Hola a todos!' },
-          createdAt: { type: 'string', format: 'date-time', description: 'Fecha de creación' }
+          id: {
+            type: 'string',
+            description: 'ID del documento en Firestore',
+            example: 'msg_abc123'
+          },
+          roomId: {
+            type: 'string',
+            description: 'Código de la sala',
+            example: 'a3b-c4d5-e6f'
+          },
+          senderUid: {
+            type: 'string',
+            description: 'UID del remitente',
+            example: 'user_uid_123'
+          },
+          senderUsername: {
+            type: 'string',
+            description: 'Username del remitente',
+            example: 'jhoan_dev'
+          },
+          text: {
+            type: 'string',
+            description: 'Contenido del mensaje',
+            example: '¡Hola a todos!'
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Fecha de creación'
+          }
         }
       },
 
@@ -77,18 +102,32 @@ const swaggerDefinition = {
       // ─── WebSocket Event Schemas ──────────────────
       WS_JoinRoom_Emit: {
         type: 'object',
-        description: '**Evento:** `join-room` → Cliente envía para unirse a una sala',
+        description:
+          '**Evento:** `join-room` → Cliente envía para unirse a una sala',
         properties: {
-          roomId: { type: 'string', description: 'Código único de la sala', example: 'a3b-c4d5-e6f' },
-          username: { type: 'string', description: 'Username del usuario', example: 'jhoan_dev' },
-          uid: { type: 'string', description: 'UID de Firebase', example: 'user_uid_123' }
+          roomId: {
+            type: 'string',
+            description: 'Código único de la sala',
+            example: 'a3b-c4d5-e6f'
+          },
+          username: {
+            type: 'string',
+            description: 'Username del usuario',
+            example: 'jhoan_dev'
+          },
+          uid: {
+            type: 'string',
+            description: 'UID de Firebase',
+            example: 'user_uid_123'
+          }
         },
         required: ['roomId', 'username', 'uid']
       },
 
       WS_RoomJoinedSuccess: {
         type: 'object',
-        description: '**Evento:** `room-joined-success` → Servidor confirma entrada exitosa a la sala',
+        description:
+          '**Evento:** `room-joined-success` → Servidor confirma entrada exitosa a la sala',
         properties: {
           roomId: { type: 'string', example: 'a3b-c4d5-e6f' },
           roomName: { type: 'string', example: 'Sala de Estudio' },
@@ -102,15 +141,20 @@ const swaggerDefinition = {
 
       WS_RoomInvalid: {
         type: 'object',
-        description: '**Evento:** `room-invalid` → La sala solicitada no existe',
+        description:
+          '**Evento:** `room-invalid` → La sala solicitada no existe',
         properties: {
-          message: { type: 'string', example: 'La sala no existe o el ID es inválido' }
+          message: {
+            type: 'string',
+            example: 'La sala no existe o el ID es inválido'
+          }
         }
       },
 
       WS_UserJoined: {
         type: 'object',
-        description: '**Evento:** `user-joined` → Notifica a otros usuarios que alguien se unió',
+        description:
+          '**Evento:** `user-joined` → Notifica a otros usuarios que alguien se unió',
         properties: {
           username: { type: 'string', example: 'jhoan_dev' },
           uid: { type: 'string', example: 'user_uid_123' },
@@ -123,7 +167,8 @@ const swaggerDefinition = {
 
       WS_UserLeft: {
         type: 'object',
-        description: '**Evento:** `user-left` → Notifica que un usuario dejó la sala',
+        description:
+          '**Evento:** `user-left` → Notifica que un usuario dejó la sala',
         properties: {
           username: { type: 'string', example: 'jhoan_dev' },
           uid: { type: 'string', example: 'user_uid_123' },
@@ -136,7 +181,8 @@ const swaggerDefinition = {
 
       WS_SendMessage_Emit: {
         type: 'object',
-        description: '**Evento:** `send-message` → Cliente envía un mensaje al servidor',
+        description:
+          '**Evento:** `send-message` → Cliente envía un mensaje al servidor',
         properties: {
           roomId: { type: 'string', example: 'a3b-c4d5-e6f' },
           senderUid: { type: 'string', example: 'user_uid_123' },
@@ -148,7 +194,8 @@ const swaggerDefinition = {
 
       WS_ReceiveMessage: {
         type: 'object',
-        description: '**Evento:** `receive-message` → Servidor emite mensaje a todos los usuarios de la sala',
+        description:
+          '**Evento:** `receive-message` → Servidor emite mensaje a todos los usuarios de la sala',
         properties: {
           id: { type: 'string', example: 'firestore_doc_id' },
           roomId: { type: 'string', example: 'a3b-c4d5-e6f' },
@@ -161,7 +208,8 @@ const swaggerDefinition = {
 
       WS_RoomHistory: {
         type: 'object',
-        description: '**Evento:** `room-history` → Servidor envía el historial de mensajes al unirse a la sala',
+        description:
+          '**Evento:** `room-history` → Servidor envía el historial de mensajes al unirse a la sala',
         properties: {
           messages: {
             type: 'array',
@@ -172,19 +220,28 @@ const swaggerDefinition = {
 
       WS_DeleteRoom_Emit: {
         type: 'object',
-        description: '**Evento:** `delete-room` → Cliente solicita eliminar una sala (solo el host)',
+        description:
+          '**Evento:** `delete-room` → Cliente solicita eliminar una sala (solo el host)',
         properties: {
           roomId: { type: 'string', example: 'a3b-c4d5-e6f' },
-          uid: { type: 'string', description: 'UID del host que solicita la eliminación', example: 'host_uid_456' }
+          uid: {
+            type: 'string',
+            description: 'UID del host que solicita la eliminación',
+            example: 'host_uid_456'
+          }
         },
         required: ['roomId', 'uid']
       },
 
       WS_RoomDeleted: {
         type: 'object',
-        description: '**Evento:** `room-deleted` → Servidor notifica que la sala fue eliminada',
+        description:
+          '**Evento:** `room-deleted` → Servidor notifica que la sala fue eliminada',
         properties: {
-          message: { type: 'string', example: 'La sala ha sido eliminada por el host' },
+          message: {
+            type: 'string',
+            example: 'La sala ha sido eliminada por el host'
+          },
           roomId: { type: 'string', example: 'a3b-c4d5-e6f' },
           uid: { type: 'string', example: 'host_uid_456' }
         }
@@ -192,9 +249,13 @@ const swaggerDefinition = {
 
       WS_ErrorMsg: {
         type: 'object',
-        description: '**Evento:** `error-msg` → Servidor envía un mensaje de error al cliente',
+        description:
+          '**Evento:** `error-msg` → Servidor envía un mensaje de error al cliente',
         properties: {
-          message: { type: 'string', example: 'Datos incompletos para ingresar a la sala' }
+          message: {
+            type: 'string',
+            example: 'Datos incompletos para ingresar a la sala'
+          }
         }
       }
     }
@@ -208,7 +269,8 @@ const swaggerDefinition = {
       get: {
         tags: ['Health'],
         summary: 'Estado del servidor',
-        description: 'Retorna un mensaje para verificar que el servidor WebSocket está activo.',
+        description:
+          'Retorna un mensaje para verificar que el servidor WebSocket está activo.',
         responses: {
           '200': {
             description: 'Servidor funcionando',
@@ -216,7 +278,8 @@ const swaggerDefinition = {
               'text/plain': {
                 schema: {
                   type: 'string',
-                  example: 'Servidor Real-time de WebSockets funcionando en puerto 3001'
+                  example:
+                    'Servidor Real-time de WebSockets funcionando en puerto 3001'
                 }
               }
             }
