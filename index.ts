@@ -17,14 +17,11 @@ import {
 } from 'firebase/firestore'
 import type { DocumentData, QuerySnapshot } from 'firebase/firestore'
 
-
 const PORT = Number(process.env.PORT) || 3001
 const app = express()
 
 app.use(cors())
 app.use(express.json())
-
-// Swagger documentation — available at /api-docs
 setupSwagger(app)
 
 app.get('/', (_req, res) => {
@@ -33,44 +30,36 @@ app.get('/', (_req, res) => {
 
 const httpServer = createServer(app)
 const io = new Server(httpServer, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+  cors: { origin: '*', methods: ['GET', 'POST'] }
 })
-const peers: any = {}
 
-// Memory tracking of active users in rooms
-// roomId -> Map of socket.id -> { username, uid }
+// roomId -> Map<socketId, { username, uid }>
 const activeUsers: Map<
   string,
   Map<string, { username: string; uid: string }>
 > = new Map()
 
-// Firestore collections
 const roomsCollection = collection(db, 'rooms')
 const messagesCollection = collection(db, 'messages')
 
 io.on('connection', (socket: Socket) => {
   console.log(`Cliente conectado: ${socket.id}`)
-  if (!peers[socket.id]) {
-    peers[socket.id] = {}
-    socket.emit('introduction', Object.keys(peers))
-    io.emit('newUserConnected', socket.id)
-    console.log(
-      'Peer joined with ID',
-      socket.id,
-      '. There are ' + io.engine.clientsCount + ' peer(s) connected.'
-    )
-  }
-  socket.on('signal', (to, from, data) => {
-    if (to in peers) {
+
+  // ────────────────────────────────────────────────
+  // SEÑALIZACIÓN WebRTC — relay puro entre peers
+  // ────────────────────────────────────────────────
+  socket.on('signal', (to: string, from: string, data: unknown) => {
+    // Solo retransmitir si el destinatario está conectado
+    if (io.sockets.sockets.has(to)) {
       io.to(to).emit('signal', to, from, data)
     } else {
-      console.log('Peer not found!')
+      console.warn(`[signal] Peer ${to} no encontrado`)
     }
   })
-  // 1. Join room and validate existence
+
+  // ────────────────────────────────────────────────
+  // UNIRSE A SALA
+  // ────────────────────────────────────────────────
   socket.on(
     'join-room',
     async (data: { roomId: string; username: string; uid: string }) => {
@@ -82,7 +71,6 @@ io.on('connection', (socket: Socket) => {
       }
 
       try {
-        // Validate that room exists in Firestore
         const q = query(roomsCollection, where('roomId', '==', roomId))
         const snapshot: QuerySnapshot<DocumentData> = await getDocs(q)
 
@@ -93,41 +81,39 @@ io.on('connection', (socket: Socket) => {
 
         const roomData = snapshot.docs[0].data()
 
-        // Join the socket room
+        // Unir el socket a la sala
         socket.join(roomId)
 
-        // Add user to active presence map
+        // Registrar en presencia
         if (!activeUsers.has(roomId)) {
           activeUsers.set(roomId, new Map())
         }
         activeUsers.get(roomId)!.set(socket.id, { username, uid })
 
-        console.log(`Usuario @${username} se unió a la sala: ${roomId}`)
-
-        // Notify other users in the room
         const currentUsersList = Array.from(
           activeUsers.get(roomId)!,
-          ([socketId, user]) => ({
-            ...user,
-            socketId
-          })
+          ([socketId, user]) => ({ ...user, socketId })
         )
 
-        // Emit events
+        // ✅ FIX: Enviar a quien se une la lista completa incluyendo su propio socketId
         socket.emit('room-joined-success', {
           roomId,
           roomName: roomData.name,
           hostUid: roomData.hostUid,
-          activeUsers: currentUsersList
+          activeUsers: currentUsersList,
+          mySocketId: socket.id // ← el frontend lo necesita para no crear offer a sí mismo
         })
 
-        socket.to(roomId).emit('user-joined', {
+        // ✅ FIX: Notificar SOLO a usuarios de esta sala (no global)
+        // y pasarles el socketId del nuevo peer para que inicien la oferta
+        socket.to(roomId).emit('new-peer-joined', {
+          peerId: socket.id,
           username,
           uid,
           activeUsers: currentUsersList
         })
 
-        // Send latest messages from Firestore for this room
+        // Historial de mensajes
         try {
           const qMessages = query(
             messagesCollection,
@@ -162,9 +148,11 @@ io.on('connection', (socket: Socket) => {
     }
   )
 
+  // ────────────────────────────────────────────────
+  // ELIMINAR SALA
+  // ────────────────────────────────────────────────
   socket.on('delete-room', async (data: { roomId: string; uid: string }) => {
     const { roomId, uid } = data
-    console.log('DELETE ROOM DATA:', data)
     if (!roomId || !uid) {
       socket.emit('error-msg', 'Datos incompletos para eliminar la sala')
       return
@@ -179,32 +167,25 @@ io.on('connection', (socket: Socket) => {
       const querySnapshot = await getDocs(q)
 
       if (!querySnapshot.empty) {
-        console.log('Eliminando sala:', roomId)
-        const roomDoc = querySnapshot.docs[0]
-        console.log('Documentos encontrados:', querySnapshot.size)
-        querySnapshot.forEach((doc) => {
-          console.log(doc.id, doc.data())
-        })
-        await deleteDoc(roomDoc.ref)
-        console.log('SALA ELIMINADA')
+        await deleteDoc(querySnapshot.docs[0].ref)
 
-        io.to(roomId).emit('room-deleted', {
-          message: 'La sala ha sido eliminada por el host',
-          roomId: roomId,
-          uid: uid
+        // ✅ FIX: El evento que escucha el frontend es 'delete-room', no 'room-deleted'
+        io.to(roomId).emit('delete-room', {
+          roomId,
+          message: 'La sala ha sido eliminada por el host'
         })
-        socket.emit('room-deleted', {
-          message: 'La sala ha sido eliminada por el host',
-          roomId: roomId,
-          uid: uid
-        })
+
         activeUsers.delete(roomId)
+        console.log(`Sala ${roomId} eliminada`)
       }
     } catch (error) {
-      console.log(error)
+      console.error('Error al eliminar sala:', error)
     }
   })
-  // 2. Routing messages and saving to Firestore
+
+  // ────────────────────────────────────────────────
+  // MENSAJES DE CHAT
+  // ────────────────────────────────────────────────
   socket.on(
     'send-message',
     async (data: {
@@ -214,19 +195,9 @@ io.on('connection', (socket: Socket) => {
       text: string
     }) => {
       const { roomId, senderUid, senderUsername, text } = data
-
-      if (
-        !roomId ||
-        !senderUid ||
-        !senderUsername ||
-        !text ||
-        text.trim().length === 0
-      ) {
-        return
-      }
+      if (!roomId || !senderUid || !senderUsername || !text?.trim()) return
 
       try {
-        // Save message to Firestore
         const docRef = await addDoc(messagesCollection, {
           roomId,
           senderUid,
@@ -235,35 +206,27 @@ io.on('connection', (socket: Socket) => {
           createdAt: Timestamp.now()
         })
 
-        const messageObj = {
+        io.to(roomId).emit('receive-message', {
           id: docRef.id,
           roomId,
           senderUid,
           senderUsername,
           text: text.trim(),
           createdAt: new Date()
-        }
-
-        // Broadcast message to everyone in the room
-        io.to(roomId).emit('receive-message', messageObj)
+        })
       } catch (error) {
-        console.error('Error al guardar mensaje en Firestore:', error)
+        console.error('Error al guardar mensaje:', error)
         socket.emit('error-msg', 'No se pudo enviar el mensaje')
       }
     }
   )
 
-  // 3. User disconnects
+  // ────────────────────────────────────────────────
+  // DESCONEXIÓN
+  // ────────────────────────────────────────────────
   socket.on('disconnect', () => {
     console.log(`Cliente desconectado: ${socket.id}`)
-    delete peers[socket.id]
-    io.sockets.emit('userDisconnected', socket.id)
-    console.log(
-      'Peer disconnected with ID',
-      socket.id,
-      '. There are ' + io.engine.clientsCount + ' peer(s) connected.'
-    )
-    // Search and remove user from presence list across all rooms
+
     for (const [roomId, usersMap] of activeUsers.entries()) {
       if (usersMap.has(socket.id)) {
         const userInfo = usersMap.get(socket.id)!
@@ -274,17 +237,15 @@ io.on('connection', (socket: Socket) => {
           socketId
         }))
 
-        // Notify other room users
+        // ✅ FIX: Emitir userDisconnected y user-left con el peerId correcto
+        io.to(roomId).emit('userDisconnected', socket.id)
         io.to(roomId).emit('user-left', {
           username: userInfo.username,
           uid: userInfo.uid,
           activeUsers: currentUsersList
         })
 
-        // Clean up empty rooms
-        if (usersMap.size === 0) {
-          activeUsers.delete(roomId)
-        }
+        if (usersMap.size === 0) activeUsers.delete(roomId)
       }
     }
   })
