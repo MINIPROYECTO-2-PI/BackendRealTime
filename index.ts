@@ -53,9 +53,11 @@ io.on('connection', (socket: Socket) => {
   // ────────────────────────────────────────────────
   // SEÑALIZACIÓN WebRTC — relay puro entre peers
   // ────────────────────────────────────────────────
-  socket.on('signal', (to: string, from: string, data: unknown) => {
+  socket.on('signal', (to: string, _from: string, data: unknown) => {
+    // ✅ Usar mySocketId del servidor en vez del 'from' del cliente,
+    // ya que el cliente puede enviar socket.id como undefined.
     if (io.sockets.sockets.has(to)) {
-      io.to(to).emit('signal', to, from, data)
+      io.to(to).emit('signal', to, mySocketId, data)
     } else {
       console.warn(`[signal] Peer ${to} no encontrado`)
     }
